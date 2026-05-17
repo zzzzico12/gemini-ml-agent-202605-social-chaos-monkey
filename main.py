@@ -153,3 +153,19 @@ async def get_simulation_summary(session_id: str):
     summary["top_spreaders"] = sorted(spreader_counts.values(), key=lambda x: x["count"], reverse=True)[:3]
 
     return summary
+
+@app.get("/simulation/{session_id}/analysis")
+async def get_simulation_analysis(session_id: str):
+    """AIによるシミュレーションの定性分析と対策案を取得します。"""
+    docs = db.collection("simulations").where("session_id", "==", session_id).stream()
+    results = [doc.to_dict() for doc in docs]
+    if not results:
+        raise HTTPException(status_code=404, detail="Analysis data not found.")
+
+    # 最初のドキュメントからニュース内容を取得
+    news_content = results[0].get("news_content", "Unknown News")
+
+    try:
+        return await executor.analyze_simulation_results(news_content, results)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI Analysis failed: {str(e)}")

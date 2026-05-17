@@ -1,4 +1,5 @@
 import json
+import json
 import vertexai
 from vertexai.generative_models import GenerativeModel, GenerationConfig
 from models import Agent, AgentAction
@@ -50,3 +51,27 @@ class SocialAgentExecutor:
                 action="IGNORE", 
                 internal_emotion="System Error: Could not process info"
             )
+
+    async def analyze_simulation_results(self, news_content: str, results: list[dict]) -> dict:
+        """シミュレーション結果を分析し、サマリと対策を生成します。"""
+        log_entries = [
+            f"Round {r.get('round')} - {r.get('agent_name')}: {r.get('action')} (Emotion: {r.get('emotion')}) -> {r.get('reply_content', '')}"
+            for r in results
+        ]
+        full_log = "\n".join(log_entries)
+
+        system_instruction = """
+        あなたは高度な社会情報分析官です。SNS上のフェイクニュース拡散シミュレーション結果を分析してください。
+        以下のJSON形式で回答してください：
+        {
+          "situation_summary": "どのようなデマが、誰を起点にどう広まったか（状況と結果）",
+          "strategic_recommendations": "この拡散を止めるために、組織が取るべき具体的な初動と中長期的な対策"
+        }
+        """
+        prompt = f"対象ニュース: {news_content}\n\nシミュレーションログ:\n{full_log}"
+
+        response = await self.model.generate_content_async(
+            [system_instruction, prompt],
+            generation_config=GenerationConfig(response_mime_type="application/json")
+        )
+        return json.loads(response.text)

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, AlertTriangle, Play, ShieldCheck, User, MessageSquare, RefreshCw } from 'lucide-react';
+import { Activity, AlertTriangle, Play, ShieldCheck, User, MessageSquare, RefreshCw, Lightbulb, ClipboardList } from 'lucide-react';
 
 const API_BASE = "http://localhost:8000";
 
@@ -12,6 +12,7 @@ const Dashboard = () => {
   const [details, setDetails] = useState([]);
   const [loading, setLoading] = useState(false);
   const [polling, setPolling] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState(null);
 
   const runSimulation = async () => {
     setLoading(true);
@@ -36,6 +37,7 @@ const Dashboard = () => {
         } else {
           setLoading(false);
           setPolling(false);
+          fetchAiAnalysis(data.session_id); // ポーリング終了後にAI分析を開始
         }
       };
       poll();
@@ -59,6 +61,15 @@ const Dashboard = () => {
     
     if (sumRes.ok || detRes.ok) setLoading(false); // 最初のデータが来たらローディング解除
     return sumRes.ok && detRes.ok;
+  };
+
+  const fetchAiAnalysis = async (id) => {
+    try {
+      const res = await fetch(`${API_BASE}/simulation/${id}/analysis`);
+      if (res.ok) setAiAnalysis(await res.json());
+    } catch (err) {
+      console.error("AI Analysis failed:", err);
+    }
   };
 
   return (
@@ -139,11 +150,36 @@ const Dashboard = () => {
             </div>
           )}
 
+          {/* AI Insights (Summary & Recommendations) */}
+          {aiAnalysis && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-700">
+              <div className="bg-slate-800 p-6 rounded-2xl border border-sky-500/30 shadow-[0_0_15px_rgba(14,165,233,0.1)]">
+                <h3 className="text-sky-400 font-bold mb-3 flex items-center gap-2">
+                  <Lightbulb size={18} /> Situation & Outcome
+                </h3>
+                <p className="text-slate-300 text-sm leading-relaxed leading-relaxed">
+                  {aiAnalysis.situation_summary}
+                </p>
+              </div>
+              <div className="bg-slate-800 p-6 rounded-2xl border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                <h3 className="text-emerald-400 font-bold mb-3 flex items-center gap-2">
+                  <ClipboardList size={18} /> Strategic Recommendations
+                </h3>
+                <p className="text-slate-300 text-sm leading-relaxed">
+                  {aiAnalysis.strategic_recommendations}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* タイムライン */}
           <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 min-h-[400px]">
-            <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-              <Activity size={20} className="text-sky-400" /> Propagation Timeline
-            </h2>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Activity size={20} className="text-sky-400" /> Propagation Timeline
+              </h2>
+              {polling && <RefreshCw size={16} className="text-slate-500 animate-spin" />}
+            </div>
             {details.length === 0 ? (
               <div className="h-64 flex items-center justify-center text-slate-500 italic">
                 Waiting for injection results...
@@ -151,23 +187,25 @@ const Dashboard = () => {
             ) : (
               <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
                 {details.map((item, i) => (
-                  <div key={i} className={`p-4 rounded-xl border ${item.action === 'RETWEET' ? 'bg-orange-950/20 border-orange-500/30' : 'bg-slate-900 border-slate-700'}`}>
+                  <div key={i} className={`p-5 rounded-xl border transition-all duration-300 ${item.action === 'RETWEET' ? 'bg-orange-950/10 border-orange-500/40' : 'bg-slate-900/50 border-slate-700'}`}>
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex items-center gap-2">
-                        <User size={16} className="text-slate-400" />
-                        <span className="font-bold text-orange-300">{item.agent_name}</span>
+                        <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 font-bold text-xs uppercase">
+                          {item.agent_name.substring(0, 2)}
+                        </div>
+                        <span className="font-bold text-slate-200">{item.agent_name}</span>
                         <span className="text-xs bg-slate-700 px-2 py-0.5 rounded text-slate-400">Round {item.round}</span>
                       </div>
                       <span className={`text-xs font-bold px-2 py-1 rounded ${
-                        item.action === 'RETWEET' ? 'bg-orange-500 text-white' : 
-                        item.action === 'REPLY' ? 'bg-sky-500 text-white' : 'bg-slate-700 text-slate-400'
+                        item.action === 'RETWEET' ? 'bg-orange-600 text-white shadow-[0_0_8px_rgba(234,88,12,0.4)]' : 
+                        item.action === 'REPLY' ? 'bg-sky-600 text-white shadow-[0_0_8px_rgba(2,132,199,0.4)]' : 'bg-slate-700 text-slate-400'
                       }`}>
                         {item.action}
                       </span>
                     </div>
                     {item.reply_content && (
-                      <p className="text-slate-200 text-sm mb-3 pl-4 border-l-2 border-slate-600 italic">
-                        "{item.reply_content}"
+                      <p className="text-slate-100 text-[15px] mb-3 leading-relaxed">
+                        {item.reply_content}
                       </p>
                     )}
                     <div className="flex items-start gap-2 bg-slate-950/50 p-2 rounded text-xs text-slate-400">
