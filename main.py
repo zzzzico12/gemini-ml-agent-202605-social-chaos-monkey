@@ -70,6 +70,14 @@ async def start_simulation(request: SimulationRequest):
         }
         publisher.publish(topic_name, json.dumps(message_data).encode("utf-8"))
 
+    # セッションの初期状態を保存
+    db.collection("sessions").document(session_id).set({
+        "session_id": session_id,
+        "total_rounds": request.rounds,
+        "total_agents": total_agents,
+        "status": "running"
+    })
+
     return SimulationResponse(
         session_id=session_id,
         results_url=f"/simulation/{session_id}/summary", # サマリーをデフォルトの遷移先に推奨
@@ -101,7 +109,10 @@ async def get_simulation_summary(session_id: str):
     if not results:
         raise HTTPException(status_code=404, detail="Simulation session not found.")
 
-    # SVS計算ロジックはそのまま
+    # セッションメタデータを取得
+    session_doc = db.collection("sessions").document(session_id).get()
+    session_meta = session_doc.to_dict() if session_doc.exists else {}
+
     summary = {
         "session_id": session_id,
         "total_actions": len(results),
@@ -109,7 +120,9 @@ async def get_simulation_summary(session_id: str):
         "action_counts": {"RETWEET": 0, "REPLY": 0, "IGNORE": 0},
         "vulnerability_score": 0.0,
         "risk_level": "LOW",
-        "top_spreaders": []
+        "top_spreaders": [],
+        "status": session_meta.get("status", "unknown"),
+        "total_expected": session_meta.get("total_agents", 0) * session_meta.get("total_rounds", 0)
     }
 
     retweet_weight = 2.0

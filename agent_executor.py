@@ -64,8 +64,8 @@ class SocialAgentExecutor:
         あなたは高度な社会情報分析官です。SNS上のフェイクニュース拡散シミュレーション結果を分析してください。
         以下のJSON形式で回答してください：
         {
-          "situation_summary": "どのようなデマが、誰を起点にどう広まったか（状況と結果）",
-          "strategic_recommendations": "この拡散を止めるために、組織が取るべき具体的な初動と中長期的な対策"
+          "situation_summary": "シミュレーションの状況と結果を要約した簡潔な文字列",
+          "strategic_recommendations": "この拡散を止めるために組織が取るべき具体的な対策をまとめた簡潔な文字列"
         }
         """
         prompt = f"対象ニュース: {news_content}\n\nシミュレーションログ:\n{full_log}"

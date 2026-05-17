@@ -115,6 +115,10 @@ async def process_agent_message(message_data: Dict):
             next_message["round"] = current_round + 1
             next_message["agent_id"] = doc.id
             publisher.publish(TOPIC_NAME, json.dumps(next_message).encode("utf-8"))
+    elif progress.get("count") == total_agents and current_round == total_rounds:
+        # 全ラウンドが完全に終了
+        print(f"Simulation {session_id} completely finished.")
+        db.collection("sessions").document(session_id).update({"status": "completed"})
 
 def callback(message: pubsub_v1.subscriber.message.Message) -> None:
     message_data = json.loads(message.data.decode("utf-8"))
