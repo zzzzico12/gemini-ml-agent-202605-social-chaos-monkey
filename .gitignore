@@ -11,3 +11,5 @@ env/
 .env
 *.log
 *.pyc
+node_modules/
+dist/

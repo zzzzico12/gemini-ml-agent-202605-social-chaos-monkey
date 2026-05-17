@@ -6,12 +6,22 @@ import uuid
 from typing import List, Dict
 from google.cloud import pubsub_v1
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from google.cloud import firestore
 from models import Agent, AgentPersona, SimulationRequest, SimulationResult, SimulationResponse
 from scenarios import SCENARIOS, get_scenario
 from agent_executor import SocialAgentExecutor
 
 app = FastAPI(title="Social Chaos Monkey MVP")
+
+# CORS設定: 開発環境のReact(3000ポートなど)からのアクセスを許可
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # 本来はGoogle Cloudコンソールや環境変数から取得
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "your-project-id")
@@ -62,7 +72,7 @@ async def start_simulation(request: SimulationRequest):
 
     return SimulationResponse(
         session_id=session_id,
-        results_url=f"/simulation/{session_id}",
+        results_url=f"/simulation/{session_id}/summary", # サマリーをデフォルトの遷移先に推奨
         results=[] # 非同期処理のため、ここでは結果は返さない
     )
 
@@ -96,8 +106,16 @@ async def get_simulation_summary(session_id: str):
         "session_id": session_id,
         "total_actions": len(results),
         "by_round": {},
-        "action_counts": {"RETWEET": 0, "REPLY": 0, "IGNORE": 0}
+        "action_counts": {"RETWEET": 0, "REPLY": 0, "IGNORE": 0},
+        "vulnerability_score": 0.0,
+        "risk_level": "LOW",
+        "top_spreaders": []
     }
+
+    retweet_weight = 2.0
+    reply_weight = 1.0
+    total_weighted_score = 0.0
+    spreader_counts = {}
 
     for r in results:
         round_num = str(r.get("round", 1))
@@ -108,5 +126,30 @@ async def get_simulation_summary(session_id: str):
         if action in summary["action_counts"]:
             summary["action_counts"][action] += 1
             summary["by_round"][round_num][action] += 1
+            
+            if action == "RETWEET":
+                total_weighted_score += retweet_weight
+                aid = r.get("agent_id")
+                spreader_counts[aid] = spreader_counts.get(aid, {"name": r.get("agent_name"), "count": 0})
+                spreader_counts[aid]["count"] += 1
+            elif action == "REPLY":
+                total_weighted_score += reply_weight
+
+    # 脆弱性スコア (SVS) の計算
+    agent_count = len(set(r.get("agent_id") for r in results))
+    max_rounds = max([int(r.get("round", 1)) for r in results]) if results else 1
+    max_possible_score = agent_count * max_rounds * retweet_weight
+    
+    if max_possible_score > 0:
+        summary["vulnerability_score"] = round((total_weighted_score / max_possible_score) * 100, 2)
+
+    # リスクレベル判定
+    if summary["vulnerability_score"] > 60:
+        summary["risk_level"] = "CRITICAL"
+    elif summary["vulnerability_score"] > 30:
+        summary["risk_level"] = "MEDIUM"
+
+    # 拡散に寄与したトップエージェント
+    summary["top_spreaders"] = sorted(spreader_counts.values(), key=lambda x: x["count"], reverse=True)[:3]
 
     return summary

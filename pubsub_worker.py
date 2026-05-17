@@ -15,7 +15,8 @@ PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "your-project-id")
 subscriber = pubsub_v1.SubscriberClient()
 publisher = pubsub_v1.PublisherClient()
 db = firestore.Client(project=PROJECT_ID)
-executor = None
+# グローバルで初期化し、スレッド開始前のレースコンディションを防止
+executor = SocialAgentExecutor(project_id=PROJECT_ID)
 
 # ワーカーループ用の共有イベントループ
 loop = asyncio.new_event_loop()
@@ -122,8 +123,6 @@ def callback(message: pubsub_v1.subscriber.message.Message) -> None:
     message.ack()
 
 def main():
-    global executor
-    
     # 非同期ループを別スレッドで実行
     def start_loop(l):
         asyncio.set_event_loop(l)
@@ -131,9 +130,6 @@ def main():
     
     t = threading.Thread(target=start_loop, args=(loop,), daemon=True)
     t.start()
-
-    # エージェント実行エンジンを初期化
-    executor = SocialAgentExecutor(project_id=PROJECT_ID)
 
     print(f"Listening for messages on {SUBSCRIPTION_NAME}...")
     streaming_pull_future = subscriber.subscribe(SUBSCRIPTION_NAME, callback=callback)
