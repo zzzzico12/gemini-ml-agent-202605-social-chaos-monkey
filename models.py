@@ -23,6 +23,8 @@ class SimulationRequest(BaseModel):
     scenario_key: Optional[str] = None
     rounds: int = 1
     target_agents: Optional[List[str]] = None
+    intervention_content: Optional[str] = None
+    intervention_round: Optional[int] = None
 
     # Pydantic v2 validator to ensure either news_content or scenario_key is provided, but not both
     @model_validator(mode='after')

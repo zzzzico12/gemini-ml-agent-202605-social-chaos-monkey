@@ -33,9 +33,9 @@ async def start_simulation(request: SimulationRequest):
     else:
         raise HTTPException(status_code=400, detail="Either 'news_content' or 'scenario_key' must be provided.")
 
-    async def process_agent(agent: Agent, current_round: int, context: str) -> SimulationResult:
+    async def process_agent(agent: Agent, current_round: int, context: str, history: str) -> SimulationResult:
         try:
-            decision = await executor.decide_action(agent, news_content_to_simulate, context)
+            decision = await executor.decide_action(agent, news_content_to_simulate, context, history)
             result = SimulationResult(
                 session_id=session_id,
                 agent_id=agent.agent_id,
@@ -86,6 +86,8 @@ async def start_simulation(request: SimulationRequest):
     all_results: List[SimulationResult] = []
     # agent_id -> そのエージェントが見ているタイムライン（履歴）
     reactions_history: Dict[str, List[str]] = {agent.agent_id: [] for agent in agents}
+    # agent_id -> そのエージェント自身の過去の言動
+    personal_histories: Dict[str, List[str]] = {agent.agent_id: [] for agent in agents}
 
     for r in range(1, request.rounds + 1):
         tasks = []
@@ -96,11 +98,18 @@ async def start_simulation(request: SimulationRequest):
                 if followed_id in reactions_history:
                     followed_reactions.extend(reactions_history[followed_id])
             
-            context = ""
+            context_parts = []
             if followed_reactions:
-                context = "Reactions from people you follow:\n" + "\n".join(followed_reactions)
+                context_parts.append("Reactions from people you follow:\n" + "\n".join(followed_reactions))
             
-            tasks.append(process_agent(agent, r, context))
+            # 介入（パッチ）の投入チェック
+            if request.intervention_content and request.intervention_round and r >= request.intervention_round:
+                context_parts.append(f"*** OFFICIAL ANNOUNCEMENT / FACT CHECK ***\n{request.intervention_content}")
+
+            context = "\n\n".join(context_parts)
+            history = "\n".join(personal_histories[agent.agent_id])
+            
+            tasks.append(process_agent(agent, r, context, history))
         
         round_results = await asyncio.gather(*tasks)
         all_results.extend(round_results)
@@ -109,9 +118,12 @@ async def start_simulation(request: SimulationRequest):
         for res in round_results:
             if res.decision and res.decision.action != "IGNORE":
                 reaction_desc = f"Round {r} - {res.agent_name}: {res.decision.reply_content or res.decision.action}"
-                # この反応を、このエージェントをフォローしている人たちのタイムラインに追加する準備
-                # (今回はシンプルに履歴全体を保持し、次ラウンドのコンテキスト生成時にフィルタリング)
                 reactions_history[res.agent_id].append(reaction_desc)
+                
+                # 個人履歴を更新
+                personal_histories[res.agent_id].append(
+                    f"Round {r}: I decided to {res.decision.action}. Emotion: {res.decision.internal_emotion}"
+                )
 
     return SimulationResponse(
         session_id=session_id,

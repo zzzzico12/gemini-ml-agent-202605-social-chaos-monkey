@@ -8,13 +8,16 @@ class SocialAgentExecutor:
         vertexai.init(project=project_id, location=location)
         self.model = GenerativeModel(model_name)
 
-    async def decide_action(self, agent: Agent, news_content: str, social_context: str = "") -> AgentAction:
+    async def decide_action(self, agent: Agent, news_content: str, social_context: str = "", personal_history: str = "") -> AgentAction:
         system_instruction = f"""
         You are an AI agent simulating a social media user.
         Your profile:
         - Name: {agent.name}
         - Persona: {agent.persona.model_dump()}
         
+        Your Past Actions in this session:
+        {personal_history if personal_history else "You haven't posted anything yet."}
+
         Social Context (What others are saying):
         {social_context if social_context else "No reactions yet."}
 
