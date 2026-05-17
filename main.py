@@ -75,7 +75,9 @@ async def start_simulation(request: SimulationRequest):
         "session_id": session_id,
         "total_rounds": request.rounds,
         "total_agents": total_agents,
-        "status": "running"
+        "status": "running",
+        "intervention_round": request.intervention_round,
+        "news_content": news_content_to_simulate
     })
 
     return SimulationResponse(
@@ -122,20 +124,55 @@ async def get_simulation_summary(session_id: str):
         "risk_level": "LOW",
         "top_spreaders": [],
         "status": session_meta.get("status", "unknown"),
-        "total_expected": session_meta.get("total_agents", 0) * session_meta.get("total_rounds", 0)
+        "total_expected": session_meta.get("total_agents", 0) * session_meta.get("total_rounds", 0),
+        "intervention_impact": {
+            "pre_spread_count": 0,
+            "post_spread_count": 0,
+        },
+        "sentiment_analysis": {}
     }
 
     retweet_weight = 2.0
     reply_weight = 1.0
     total_weighted_score = 0.0
     spreader_counts = {}
+    intervention_round = session_meta.get("intervention_round")
 
     for r in results:
-        round_num = str(r.get("round", 1))
+        current_round = r.get("round", 1)
+        round_num = str(current_round)
         if round_num not in summary["by_round"]:
             summary["by_round"][round_num] = {"RETWEET": 0, "REPLY": 0, "IGNORE": 0}
         
         action = r.get("action")
+        emotion = r.get("emotion", "Neutral")
+        
+        # 感情をカテゴリにマッピング（キーワードが含まれているかで判定）
+        emotion_lower = emotion.lower() if emotion else "neutral"
+        
+        category_keywords = {
+            "Positive": ["happy", "relieved", "confident", "optimistic", "calm", "safe", "agree"],
+            "Negative": ["anxious", "angry", "worried", "scared", "frustrated", "negative", "concerned", "disappointed", "panic"],
+            "Uncertain": ["surprised", "confused", "curious", "skeptical", "shocked", "doubtful"]
+        }
+        
+        sentiment_key = "Neutral"
+        found = False
+        for cat, keywords in category_keywords.items():
+            if any(k in emotion_lower for k in keywords):
+                sentiment_key = cat
+                found = True
+                break
+        
+        if not found and "neutral" not in emotion_lower:
+            # キーワードが見つからないが、明らかに感情が動いている場合はUncertainへ
+            if len(emotion_lower) > 5:
+                sentiment_key = "Uncertain"
+            else:
+                sentiment_key = "Neutral"
+
+        summary["sentiment_analysis"][sentiment_key] = summary["sentiment_analysis"].get(sentiment_key, 0) + 1
+
         if action in summary["action_counts"]:
             summary["action_counts"][action] += 1
             summary["by_round"][round_num][action] += 1
@@ -147,6 +184,13 @@ async def get_simulation_summary(session_id: str):
                 spreader_counts[aid]["count"] += 1
             elif action == "REPLY":
                 total_weighted_score += reply_weight
+
+            # 介入前後の拡散インパクト計測
+            if action in ["RETWEET", "REPLY"]:
+                if intervention_round and current_round >= intervention_round:
+                    summary["intervention_impact"]["post_spread_count"] += 1
+                else:
+                    summary["intervention_impact"]["pre_spread_count"] += 1
 
     # 脆弱性スコア (SVS) の計算
     agent_count = len(set(r.get("agent_id") for r in results))
