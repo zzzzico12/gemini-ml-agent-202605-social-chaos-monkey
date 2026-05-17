@@ -1,0 +1,26 @@
+steps:
+  # 1. Docker イメージのビルド
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/social-chaos-monkey:$COMMIT_SHA', '.']
+
+  # 2. イメージを Container Registry にプッシュ
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/social-chaos-monkey:$COMMIT_SHA']
+
+  # 3. Cloud Run へのデプロイ (APIサーバー)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'social-chaos-monkey-api'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/social-chaos-monkey:$COMMIT_SHA'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+
+images:
+  - 'gcr.io/$PROJECT_ID/social-chaos-monkey:$COMMIT_SHA'

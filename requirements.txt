@@ -4,3 +4,4 @@ google-cloud-aiplatform
 pydantic
 python-dotenv
 google-cloud-firestore
+google-cloud-pubsub
