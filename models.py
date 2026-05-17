@@ -21,6 +21,7 @@ class AgentAction(BaseModel):
 class SimulationRequest(BaseModel):
     news_content: Optional[str] = None
     scenario_key: Optional[str] = None
+    rounds: int = 1
     target_agents: Optional[List[str]] = None
 
     # Pydantic v2 validator to ensure either news_content or scenario_key is provided, but not both
@@ -33,7 +34,14 @@ class SimulationRequest(BaseModel):
         return self
 
 class SimulationResult(BaseModel):
+    session_id: str
     agent_id: str
     agent_name: str
     decision: Optional[AgentAction] = None
+    round: int = 1
     status: str
+
+class SimulationResponse(BaseModel):
+    session_id: str
+    results_url: str
+    results: List[SimulationResult]
