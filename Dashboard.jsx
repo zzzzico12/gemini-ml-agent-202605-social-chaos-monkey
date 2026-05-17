@@ -100,7 +100,7 @@ const Dashboard = () => {
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight text-slate-900">
-                Social Chaos Monkey
+                Social Risk Simulator
               </h1>
               <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Vulnerability Assessment</p>
             </div>
