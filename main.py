@@ -226,3 +226,44 @@ async def get_simulation_analysis(session_id: str):
         return await executor.analyze_simulation_results(news_content, results)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI Analysis failed: {str(e)}")
+
+@app.get("/agents", response_model=List[Agent])
+async def get_agents():
+    """登録されている全エージェントを取得します。"""
+    docs = db.collection("agents").stream()
+    agents = [Agent(**doc.to_dict()) for doc in docs]
+    return agents
+
+@app.post("/agents", response_model=Agent)
+async def create_agent(agent: Agent):
+    """新しいエージェントを登録します。"""
+    try:
+        if not agent.agent_id:
+            agent.agent_id = f"agent_{uuid.uuid4().hex[:8]}"
+        db.collection("agents").document(agent.agent_id).set(agent.dict())
+        return agent
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create agent: {str(e)}")
+
+@app.delete("/agents/{agent_id}")
+async def delete_agent(agent_id: str):
+    """指定されたエージェントを削除します。"""
+    try:
+        db.collection("agents").document(agent_id).delete()
+        return {"status": "success", "message": f"Agent {agent_id} deleted."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete agent: {str(e)}")
+
+@app.get("/trends")
+async def get_external_trends():
+    """
+    外部SNS（モック）から現在のトレンドトピックを取得します。
+    本来は X API や Google News API 等と連携します。
+    """
+    return [
+        {"id": 1, "topic": "生成AIのセキュリティ脆弱性が報告される", "category": "Tech"},
+        {"id": 2, "topic": "大手飲料メーカーの製品に異物混入の疑い", "category": "Social"},
+        {"id": 3, "topic": "政府、デジタル資産に関する新しい規制案を発表", "category": "Politics"},
+        {"id": 4, "topic": "世界的テック企業、大規模な人員削減を計画か", "category": "Business"},
+        {"id": 5, "topic": "新種のサイバー攻撃により一部のインフラが停止", "category": "Emergency"}
+    ]

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, AlertTriangle, Play, ShieldCheck, User, MessageSquare, RefreshCw, Lightbulb, ClipboardList, Info, BarChart3, Clock, Send, Zap, ChevronRight, LayoutDashboard, Target, ShieldAlert, Settings, TrendingUp, History } from 'lucide-react';
+import { Activity, AlertTriangle, Play, ShieldCheck, User, MessageSquare, RefreshCw, Lightbulb, ClipboardList, Info, BarChart3, Clock, Send, Zap, ChevronRight, LayoutDashboard, Target, ShieldAlert, Settings, TrendingUp, History, Download, Users, Plus, X, Globe, Trash2 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, AreaChart, Area, PieChart, Pie, Cell, ComposedChart, Bar, Legend } from 'recharts';
 
 const API_BASE = "http://localhost:8000";
@@ -26,6 +26,23 @@ const Dashboard = () => {
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [interventionContent, setInterventionContent] = useState('');
   const [interventionRound, setInterventionRound] = useState(2);
+  const [showAgentModal, setShowAgentModal] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState({ show: false, agentId: null, agentName: '' });
+  const [agents, setAgents] = useState([]);
+  const [newAgent, setNewAgent] = useState({ name: '', persona: { gullibility: 0.5, influence: 0.5, interests: '', political_bias: 'Neutral' } });
+  const [trends, setTrends] = useState([]);
+  const [loadingTrends, setLoadingTrends] = useState(false);
+
+  useEffect(() => {
+    fetchAgents();
+  }, []);
+
+  const fetchAgents = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/agents`);
+      if (res.ok) setAgents(await res.json());
+    } catch (err) { console.error("Failed to fetch agents:", err); }
+  };
 
   const runSimulation = async () => {
     setLoading(true);
@@ -141,6 +158,77 @@ const Dashboard = () => {
     return ((preAvg - postAvg) / preAvg * 100).toFixed(1);
   };
 
+  // シミュレーション結果をJSONとしてエクスポート
+  const exportResultsJSON = () => {
+    if (!summary || details.length === 0) return;
+    const exportData = {
+      metadata: {
+        session_id: sessionId,
+        exported_at: new Date().toISOString(),
+        config: { scenario: news || scenario, rounds, interventionContent, interventionRound }
+      },
+      summary,
+      ai_analysis: aiAnalysis,
+      timeline: details
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `social-risk-report-${sessionId.slice(0, 8)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleAddAgent = async () => {
+    if (!newAgent.name) return;
+    try {
+      const payload = {
+        agent_id: `agent_${Math.random().toString(36).substr(2, 9)}`,
+        name: newAgent.name,
+        persona: {
+          ...newAgent.persona,
+          interests: newAgent.persona.interests.split(',').map(i => i.trim())
+        },
+        following: []
+      };
+      const res = await fetch(`${API_BASE}/agents`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        fetchAgents();
+        setNewAgent({ name: '', persona: { gullibility: 0.5, influence: 0.5, interests: '', political_bias: 'Neutral' } });
+      }
+    } catch (err) { console.error(err); }
+  };
+
+  const handleDeleteAgent = async (id) => {
+    try {
+      const res = await fetch(`${API_BASE}/agents/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchAgents();
+        setDeleteConfirm({ show: false, agentId: null, agentName: '' });
+      }
+    } catch (err) { console.error(err); }
+  };
+
+  const fetchTrends = async () => {
+    setLoadingTrends(true);
+    try {
+      const res = await fetch(`${API_BASE}/trends`);
+      if (res.ok) {
+        const data = await res.json();
+        setTrends(data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingTrends(false);
+    }
+  };
+
   // 感情カテゴリごとの色を定義
   const CATEGORY_COLORS = {
     "Positive": '#10b981', // Green
@@ -166,6 +254,22 @@ const Dashboard = () => {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setShowAgentModal(true)}
+              className="flex items-center gap-2 text-xs font-bold text-slate-600 bg-white hover:bg-slate-50 px-4 py-2 rounded-lg border border-slate-200 shadow-sm transition-all active:scale-95"
+            >
+              <Users size={14} />
+              Manage Agents ({agents.length})
+            </button>
+            {summary && !polling && (
+              <button 
+                onClick={exportResultsJSON}
+                className="flex items-center gap-2 text-xs font-bold text-slate-600 bg-white hover:bg-slate-50 px-4 py-2 rounded-lg border border-slate-200 shadow-sm transition-all active:scale-95"
+              >
+                <Download size={14} />
+                Export Data
+              </button>
+            )}
             {polling && (
               <div className="flex items-center gap-2 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100 uppercase tracking-widest">
                 <RefreshCw size={12} className="animate-spin" /> Live Tracking
@@ -196,12 +300,35 @@ const Dashboard = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Custom News Content</label>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="block text-xs font-bold text-slate-500 uppercase">Custom News Content</label>
+                    <button 
+                      onClick={fetchTrends}
+                      className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+                    >
+                      <Globe size={12} /> Fetch Trends
+                    </button>
+                  </div>
                   <textarea 
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 h-28 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all resize-none"
                     value={news} onChange={(e) => setNews(e.target.value)}
                     placeholder="Enter custom rumor text..."
                   />
+                  {trends.length > 0 && (
+                    <div className="mt-2 p-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                      <p className="text-[10px] font-bold text-indigo-400 uppercase mb-2">Live Hot Topics</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {trends.map(t => (
+                          <button 
+                            key={t.id} onClick={() => {setNews(t.topic); setTrends([]);}}
+                            className="text-[10px] bg-white border border-indigo-100 text-indigo-700 px-2 py-1 rounded-md hover:bg-indigo-600 hover:text-white transition-colors"
+                          >
+                            {t.topic}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Rounds</label>
@@ -504,6 +631,120 @@ const Dashboard = () => {
           </div>
         </div>
       </main>
+
+      {/* Agent Management Modal */}
+      {showAgentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <Users className="text-indigo-600" size={20} />
+                <h2 className="text-lg font-bold text-slate-800">Agent Persona Settings</h2>
+              </div>
+              <button onClick={() => setShowAgentModal(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8 h-[500px] overflow-y-auto">
+              {/* List Section */}
+              <div className="space-y-4">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Active Agents</h3>
+                <div className="space-y-2">
+                  {agents.map((agent) => (
+                    <div key={agent.agent_id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-bold text-slate-800">@{agent.name}</p>
+                        <p className="text-[10px] text-slate-400">Gullibility: {agent.persona.gullibility} | Influence: {agent.persona.influence}</p>
+                      </div>
+                      <button 
+                        onClick={() => setDeleteConfirm({ show: true, agentId: agent.agent_id, agentName: agent.name })}
+                        className="text-slate-300 hover:text-rose-500 p-2 transition-colors"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Add Section */}
+              <div className="space-y-5 bg-indigo-50/30 p-5 rounded-2xl border border-indigo-100/50">
+                <h3 className="text-xs font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-2">
+                  <Plus size={14} /> Create New Persona
+                </h3>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
+                      Agent Name <span className="text-rose-500">*</span>
+                    </label>
+                    <input 
+                      type="text" placeholder="e.g. Satoshi" 
+                      className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      value={newAgent.name} onChange={(e) => setNewAgent({...newAgent, name: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Gullibility (0.0 - 1.0)</label>
+                    <input 
+                      type="range" min="0" max="1" step="0.1" className="w-full accent-indigo-600"
+                      value={newAgent.persona.gullibility} onChange={(e) => setNewAgent({...newAgent, persona: {...newAgent.persona, gullibility: parseFloat(e.target.value)}})}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Influence (0.0 - 1.0)</label>
+                    <input 
+                      type="range" min="0" max="1" step="0.1" className="w-full accent-indigo-600"
+                      value={newAgent.persona.influence} onChange={(e) => setNewAgent({...newAgent, persona: {...newAgent.persona, influence: parseFloat(e.target.value)}})}
+                    />
+                  </div>
+                  <textarea 
+                    placeholder="Interests (comma separated: AI, Tech, Politics)" 
+                    className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm h-20 resize-none outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    value={newAgent.persona.interests} onChange={(e) => setNewAgent({...newAgent, persona: {...newAgent.persona, interests: e.target.value}})}
+                  />
+                  <button 
+                    onClick={handleAddAgent}
+                    disabled={!newAgent.name}
+                    className={`w-full py-3 text-white rounded-xl font-bold text-sm shadow-md transition-all active:scale-95 ${!newAgent.name ? 'bg-slate-300 cursor-not-allowed shadow-none' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}
+                  >
+                    Add Agent
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm.show && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6 border border-slate-200">
+            <div className="flex items-center gap-3 text-rose-600 mb-4">
+              <AlertTriangle size={24} />
+              <h3 className="text-lg font-bold">Delete Agent?</h3>
+            </div>
+            <p className="text-sm text-slate-600 mb-6 leading-relaxed">
+              Are you sure you want to delete <span className="font-bold text-slate-900">@{deleteConfirm.agentName}</span>? This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setDeleteConfirm({ show: false, agentId: null, agentName: '' })}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => handleDeleteAgent(deleteConfirm.agentId)}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white font-bold text-sm hover:bg-rose-700 shadow-lg shadow-rose-200 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
