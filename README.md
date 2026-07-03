@@ -69,10 +69,41 @@ curl -X POST "http://localhost:8000/simulate" \
      -H "Content-Type: application/json" \
      -d '{"news_content": "速報：〇〇社の基幹システムに大規模な脆弱性が発見されました。"}'
 ```
-3.  **使用方法**:
-    - 左側のパネルでシナリオを選択、またはカスタムテキストを入力します。
-    - 「Launch Simulation」をクリックして拡散を開始します。
-    - 右側のパネルで、脆弱性スコアやAIによる分析結果、タイムラインを確認します。
+## 画面の使い方
+
+セットアップ不要で試したい場合は、公開デモを利用できます。
+
+**公開URL**: https://social-risk-simulator-399385533323.us-central1.run.app
+
+### 1. シミュレーションを設定する（左側パネル）
+
+| 項目 | 説明 |
+| :--- | :--- |
+| **Scenario Preset** | `product_safety`（製品混入デマ）/ `market_manipulation`（株価操作デマ）/ `disaster_panic`（災害パニックデマ）から既定シナリオを選択します。 |
+| **Custom News Content** | 任意のテキストを入力すると、そちらが優先してシミュレーション対象になります（Scenario Presetは無視されます）。右上の **Fetch Trends** ボタンで外部トレンド（モック）の候補を取得し、クリックして流し込むこともできます。 |
+| **Rounds** | シミュレーションを何ラウンド継続するか（1〜10）。ラウンドを重ねるごとにエージェントは過去の自分の発言や、フォローしている他エージェントの反応を踏まえて次の行動を決定します。 |
+| **Intervention Patch** | 「公式声明」（Official Statement）を入力すると、指定した **Injection Round** 以降、全エージェントの意思決定コンテキストにその声明が注入されます。デマ拡散に対する対策の効果を検証できます。空欄のままなら介入なしで実行されます。 |
+| **Launch Simulation** | 上記設定でシミュレーションを開始します。実行中はボタンが「Processing...」表示になり、ヘッダーに **LIVE TRACKING** インジケーターが表示されます（Pub/Sub経由の非同期処理結果を3秒間隔でポーリングしています）。 |
+
+### 2. 結果を確認する（右側パネル）
+
+ラウンドの処理が進むにつれて、以下が順次更新されます。
+
+- **Vulnerability Score / Risk Level**: リツイート・返信数とエージェントの影響力から算出した脆弱性スコア（%）と、それに基づくリスク判定（LOW/MEDIUM/CRITICAL）。
+- **Suppression Effect**: Intervention Patchを設定した場合、介入前後で1ラウンドあたりの拡散速度が何%変化したかを表示します（プラスは抑制成功、マイナスは悪化）。
+- **Top Spreader**: 最もリツイートに貢献したエージェントとその回数。
+- **Spread Analytics**: ラウンドごとの新規拡散数（棒グラフ）と累積拡散数（面グラフ）。介入ラウンドには緑の点線が表示されます。
+- **Sentiment Distribution**: 全エージェントの反応をPositive/Negative/Neutral/Uncertainに分類したドーナツチャート。
+- **Analysis / Recommendations**: シミュレーション完了後、Geminiが状況要約と推奨対応策を自動生成して表示します。
+- **Propagation Timeline**: ラウンドごとに、各エージェントの行動（RETWEET/REPLY/IGNORE）、発言内容、そして意思決定の**Logic**（内心の理由づけ）を時系列で確認できます。
+
+### 3. エージェントを管理する
+
+ヘッダー右上の **Manage Agents** ボタンからモーダルを開くと、現在登録されているエージェント（ペルソナ）の一覧確認・削除ができます。**Create New Persona** フォームでは、名前・Gullibility（信じやすさ 0.0〜1.0）・Influence（影響力 0.0〜1.0）・Interests（関心事、カンマ区切り）を指定して新しいエージェントを追加できます。
+
+### 4. 結果をエクスポートする
+
+シミュレーション完了後、ヘッダーに表示される **Export Data** ボタンから、サマリー・AI分析・タイムライン全体をJSONファイルとしてダウンロードできます。
 
 ### 脆弱性レポートの確認
 シミュレーション結果は Firestore の `simulations` コレクションに保存されます。`session_id` ごとにエージェントの感情変化や拡散アクションを追跡し、組織の「デマ耐性（SVS）」を分析します。
