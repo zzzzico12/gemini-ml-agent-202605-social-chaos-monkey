@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Activity, AlertTriangle, Play, ShieldCheck, User, MessageSquare, RefreshCw, Lightbulb, ClipboardList, Info, BarChart3, Clock, Send, Zap, ChevronRight, LayoutDashboard, Target, ShieldAlert, Settings, TrendingUp, History, Download, Users, Plus, X, Globe, Trash2 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, AreaChart, Area, PieChart, Pie, Cell, ComposedChart, Bar, Legend } from 'recharts';
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 
 const MetricTooltip = ({ text }) => (
   <div className="group relative inline-block ml-1.5 align-middle">

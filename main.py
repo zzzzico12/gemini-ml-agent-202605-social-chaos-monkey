@@ -1,16 +1,19 @@
 import os
 import json
+import base64
 import asyncio
 from datetime import datetime, timezone
 import uuid
 from typing import List, Dict
 from google.cloud import pubsub_v1
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from google.cloud import firestore
 from models import Agent, AgentPersona, SimulationRequest, SimulationResult, SimulationResponse
 from scenarios import SCENARIOS, get_scenario
 from agent_executor import SocialAgentExecutor
+from agent_worker import process_agent_message
 
 app = FastAPI(title="Social Chaos Monkey MVP")
 
@@ -85,6 +88,20 @@ async def start_simulation(request: SimulationRequest):
         results_url=f"/simulation/{session_id}/summary", # サマリーをデフォルトの遷移先に推奨
         results=[] # 非同期処理のため、ここでは結果は返さない
     )
+
+@app.post("/pubsub/push")
+async def pubsub_push_handler(request: Request):
+    """
+    Pub/Sub push配信を受け取り、ラウンド処理を行う。
+    Cloud Run上ではpubsub_worker.py(pullベース)の代わりにこちらが使われる。
+    """
+    envelope = await request.json()
+    if not envelope or "message" not in envelope:
+        raise HTTPException(status_code=400, detail="Invalid Pub/Sub message format")
+
+    message_data = json.loads(base64.b64decode(envelope["message"]["data"]).decode("utf-8"))
+    await process_agent_message(message_data)
+    return {"status": "ok"}
 
 @app.get("/simulation/{session_id}")
 async def get_simulation_results(session_id: str):
@@ -267,3 +284,8 @@ async def get_external_trends():
         {"id": 4, "topic": "世界的テック企業、大規模な人員削減を計画か", "category": "Business"},
         {"id": 5, "topic": "新種のサイバー攻撃により一部のインフラが停止", "category": "Emergency"}
     ]
+
+# フロントエンドのビルド成果物(dist/)が存在する場合、静的ファイルとして配信する
+# (Cloud Run上ではAPIとフロントエンドを単一サービスで提供するため)
+if os.path.isdir("dist"):
+    app.mount("/", StaticFiles(directory="dist", html=True), name="frontend")
