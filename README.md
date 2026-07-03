@@ -71,10 +71,6 @@ curl -X POST "http://localhost:8000/simulate" \
 ```
 ## 画面の使い方
 
-セットアップ不要で試したい場合は、公開デモを利用できます。
-
-**公開URL**: https://social-risk-simulator-399385533323.us-central1.run.app
-
 ### 1. シミュレーションを設定する（左側パネル）
 
 | 項目 | 説明 |
